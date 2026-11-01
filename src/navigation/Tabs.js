@@ -10,7 +10,7 @@ import { useRegister } from '../services/UserService';
 const Tab = createMaterialTopTabNavigator();
 
 export default function RegisterTabs() {
-  const { dataPValidate } = useRegister();
+  const { dataPValidate, dataCarValidate, setShowPersonalErrors, setShowVehicleErrors } = useRegister();
 
   return (
     <Tab.Navigator
@@ -35,7 +35,10 @@ export default function RegisterTabs() {
         options={{ title: 'Vehiculo' }}
         listeners={{
           tabPress: (e) => {
-            if (!dataPValidate) e.preventDefault();
+            if (!dataPValidate) {
+              e.preventDefault();
+              setShowPersonalErrors(true);
+            }
           },
         }}
       />
@@ -46,8 +49,9 @@ export default function RegisterTabs() {
         options={{ title: 'Documentos' }}
         listeners={{
           tabPress: (e) => {
-            if (!dataPValidate) {
+            if (!dataCarValidate) {
               e.preventDefault();
+              setShowVehicleErrors(true);
             }
           },
         }}

@@ -6,7 +6,7 @@ import { useVehicle } from '../../services/UserService';
 
 export default function VehicleScreen() {
   
-  const { dataVehicle, register, setDataCarValidate } = useVehicle();
+  const { dataVehicle, register, setDataCarValidate, showVehicleErrors } = useVehicle();
 
   const [showCategory, setShowCategory] = useState(false);
   const [showColor, setShowColor] = useState(false);
@@ -24,34 +24,34 @@ export default function VehicleScreen() {
 
   const currentYear = new Date().getFullYear();
 
-  const validateFormData = () => {
+  const validateFormData = (dataToValidate = formData) => {
       const newErrors = {};
 
-      if (!['Economico', 'XL', 'Premium'].includes(formData.category)) {
-          newErrors.category = 'Seleccione una categoria valida';
+      if (!['Económico', 'XL', 'Premium'].includes(dataToValidate.category)) {
+          newErrors.category = 'Seleccione una categoría válida';
       }
-      if (!formData.photoUri) {
+      if (!dataToValidate.photoUri) {
           newErrors.photoUri = 'La foto es obligatoria';
       }
       const plateValidate = /^[A-Z]{3}\d{3}$/;
-      if (!plateValidate.test(formData.plate)) {
-          newErrors.plate = 'Formato invalido (Ej: ABC123)';
+      if (!plateValidate.test(dataToValidate.plate)) {
+          newErrors.plate = 'Formato inválido (Ej: ABC123)';
       }
-      if (!formData.mym || !formData.mym.trim() || formData.mym.length > 30) {
-          newErrors.mym = 'Maximo 30 caracteres';
+      if (!dataToValidate.mym || !dataToValidate.mym.trim() || dataToValidate.mym.length > 30) {
+          newErrors.mym = 'Máximo 30 caracteres';
       }
-      const yearNum = parseInt(formData.year, 10);
-      if (!/^\d{4}$/.test(formData.year) || yearNum < 1900 || yearNum > currentYear) {
-          newErrors.year = `Año invalido (4 digitos, max. ${currentYear})`;
+      const yearNum = parseInt(dataToValidate.year, 10);
+      if (!/^\d{4}$/.test(dataToValidate.year) || yearNum < 1900 || yearNum > currentYear) {
+          newErrors.year = `Año inválido (4 dígitos, máx. ${currentYear})`;
       }
-      if (!formData.color) {
+      if (!dataToValidate.color) {
           newErrors.color = 'Seleccione un color';
       }
-      const passengersNum = parseInt(formData.passengers, 10);
+      const passengersNum = parseInt(dataToValidate.passengers, 10);
       if (isNaN(passengersNum) || passengersNum <= 0) {
-          newErrors.passengers = 'Ingrese una capacidad valida';
-      } else if (formData.category === 'XL' && passengersNum < 6) {
-          newErrors.passengers = 'La categoria XL exige minimo 6 pasajeros';
+          newErrors.passengers = 'Ingrese una capacidad válida';
+      } else if (dataToValidate.category === 'XL' && passengersNum < 6) {
+          newErrors.passengers = 'La categoría XL exige mínimo 6 pasajeros';
       }
 
       return newErrors;
@@ -96,30 +96,47 @@ export default function VehicleScreen() {
   };
 
   const handleChange = (field, value) => {
-
     if (field === 'plate') {
         value = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
     } else if (field === 'year' || field === 'passengers') {
         value = value.replace(/\D/g, '');
     }
 
-    setFormData(prev => ({
-        ...prev,
-        [field]: value,
-    }));
+    setFormData(prev => {
+        const updated = { ...prev, [field]: value };
+        
+        setTimeout(() => {
+            const currentErrors = validateFormData(updated);
+            const isValid = Object.keys(currentErrors).length === 0;
+            setDataCarValidate(isValid);
+            register(updated);
 
-    setErrors(prev => ({
-        ...prev,
-        [field]: undefined
-    }));
+            if (showVehicleErrors) {
+                setErrors(currentErrors);
+            }
+        }, 0);
+
+        return updated;
+    });
   };
 
- const isFormValid = Object.keys(validateFormData()).length === 0;
+  useEffect(() => {
+      if (showVehicleErrors) {
+          const validationErrors = validateFormData();
+          setErrors(validationErrors);
+      }
+  }, [showVehicleErrors]);
 
-    useEffect(() => {
-        setDataCarValidate(isFormValid);
-        register(formData);
-    }, [formData, isFormValid, setDataCarValidate, register]);
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          const validationErrors = validateFormData();
+          const isValid = Object.keys(validationErrors).length === 0;
+          setDataCarValidate(isValid);
+          register(formData);
+      }, 0);
+
+      return () => clearTimeout(timer);
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -158,16 +175,18 @@ export default function VehicleScreen() {
             {formData.photoUri ? 'Reemplazar foto del vehículo' : 'Cargue foto (donde se vea la placa)'}
           </Text>
         </TouchableOpacity>
+        {showVehicleErrors && errors.photoUri && <Text style={styles.errorText}>{errors.photoUri}</Text>}
 
         <View>
           <TouchableOpacity
-            style={styles.input}
+            style={[styles.input, showVehicleErrors && errors.category && styles.inputError]}
             onPress={() => setShowCategory(!showCategory)}
           >
             <Text style={{ color: formData.category ? '#000' : '#999' }}>
               {formData.category || 'Categoría'} ▾
             </Text>
           </TouchableOpacity>
+          {showVehicleErrors && errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
 
           {showCategory && ['Económico', 'XL', 'Premium'].map(option => (
             <TouchableOpacity
@@ -183,38 +202,51 @@ export default function VehicleScreen() {
           ))}
         </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Placa (Ej: ABC123)"
-          value={formData.plate}
-          onChangeText={(value) => handleChange('plate', value)}
-          maxLength={6}
-          autoCapitalize="characters"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Marca y modelo"
-          value={formData.mym}
-          onChangeText={(value) => handleChange('mym', value)}
-          maxLength={30}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Año"
-          value={formData.year}
-          onChangeText={(value) => handleChange('year', value)}
-          maxLength={4}
-          keyboardType="number-pad"
-        />
+        <View>
+            <TextInput
+              style={[styles.input, showVehicleErrors && errors.plate && styles.inputError]}
+              placeholder="Placa (Ej: ABC123)"
+              value={formData.plate}
+              onChangeText={(value) => handleChange('plate', value)}
+              maxLength={6}
+              autoCapitalize="characters"
+            />
+            {showVehicleErrors && errors.plate && <Text style={styles.errorText}>{errors.plate}</Text>}
+        </View>
+
+        <View>
+            <TextInput
+              style={[styles.input, showVehicleErrors && errors.mym && styles.inputError]}
+              placeholder="Marca y modelo"
+              value={formData.mym}
+              onChangeText={(value) => handleChange('mym', value)}
+              maxLength={30}
+            />
+            {showVehicleErrors && errors.mym && <Text style={styles.errorText}>{errors.mym}</Text>}
+        </View>
+
+        <View>
+            <TextInput
+              style={[styles.input, showVehicleErrors && errors.year && styles.inputError]}
+              placeholder="Año"
+              value={formData.year}
+              onChangeText={(value) => handleChange('year', value)}
+              maxLength={4}
+              keyboardType="number-pad"
+            />
+            {showVehicleErrors && errors.year && <Text style={styles.errorText}>{errors.year}</Text>}
+        </View>
+
         <View>
           <TouchableOpacity
-            style={styles.input}
+            style={[styles.input, showVehicleErrors && errors.color && styles.inputError]}
             onPress={() => setShowColor(!showColor)}
           >
             <Text style={{ color: formData.color ? '#000' : '#999' }}>
               {formData.color || 'Color'} ▾
             </Text>
           </TouchableOpacity>
+          {showVehicleErrors && errors.color && <Text style={styles.errorText}>{errors.color}</Text>}
 
           {showColor && ['Blanco', 'Negro', 'Gris', 'Plata', 'Rojo', 'Azul'].map(option => (
             <TouchableOpacity
@@ -229,14 +261,18 @@ export default function VehicleScreen() {
             </TouchableOpacity>
           ))}
         </View>
-        <TextInput
-            style={styles.input}
-            placeholder="Capacidad de pasajeros"
-            value={formData.passengers}
-            onChangeText={(value) => handleChange('passengers', value)}
-            maxLength={2}
-            keyboardType="number-pad"
-        />
+
+        <View>
+            <TextInput
+                style={[styles.input, showVehicleErrors && errors.passengers && styles.inputError]}
+                placeholder="Capacidad de pasajeros"
+                value={formData.passengers}
+                onChangeText={(value) => handleChange('passengers', value)}
+                maxLength={2}
+                keyboardType="number-pad"
+            />
+            {showVehicleErrors && errors.passengers && <Text style={styles.errorText}>{errors.passengers}</Text>}
+        </View>
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -261,6 +297,15 @@ const styles = StyleSheet.create({
       padding: 12,
       backgroundColor: '#fff',
   },
+  inputError: {
+      borderColor: '#ff3b30',
+  },
+  errorText: {
+      color: '#ff3b30',
+      fontSize: 12,
+      marginTop: 4,
+      marginLeft: 4,
+  },
   previewContainer: {
       width: 200,
       height: 130,
@@ -281,7 +326,7 @@ const styles = StyleSheet.create({
       borderRadius: 8,
       alignSelf: 'center',
       alignItems: 'center',
-      marginBottom: 10,
+      marginBottom: 2,
       width: 280,
   },
   buttonText: { color: '#fff', fontWeight: 'bold' },

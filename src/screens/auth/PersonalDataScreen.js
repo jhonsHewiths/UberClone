@@ -8,7 +8,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRegister } from '../../services/UserService';
 
 export default function FormPersonalData() {
-    const { dataRegister, register, setDataPValidate } = useRegister();
+
+    const { dataRegister, register, setDataPValidate, showPersonalErrors } = useRegister();
 
     const [showPicker, setShowPicker] = useState(false);
     const [showGender, setShowGender] = useState(false);
@@ -33,40 +34,41 @@ export default function FormPersonalData() {
         today.getDate()
     );
 
-    const validateFormData = () => {
+    const validateFormData = (dataToValidate = formData) => {
         const newErrors = {};
 
-        if (!formData.photoUri) {
+        if (!dataToValidate.photoUri) {
             newErrors.photoUri = 'La foto es obligatoria';
         }
-        if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]{1,50}$/.test(formData.name) || !formData.name.trim()) {
+        const nameVal = dataToValidate.name || '';
+        if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]{1,50}$/.test(nameVal) || nameVal.trim() === '') {
             newErrors.name = 'Solo letras y espacios, máximo 50 caracteres';
         }
-        if (!/^\d{6,10}$/.test(formData.idNumber)) {
+        if (!/^\d{6,10}$/.test(dataToValidate.idNumber)) {
             newErrors.idNumber = 'Debe tener entre 6 y 10 dígitos';
         }
-        if (!/^\d{10}$/.test(formData.phone)) {
+        if (!/^\d{10}$/.test(dataToValidate.phone)) {
             newErrors.phone = 'Debe tener 10 dígitos';
         }
-        if (!formData.birthdate) {
+        if (!dataToValidate.birthdate) {
             newErrors.birthdate = 'Seleccione una fecha';
         } else {
-            const birth = new Date(formData.birthdate + 'T12:00:00');
+            const birth = new Date(dataToValidate.birthdate + 'T12:00:00');
 
             if (Number.isNaN(birth.getTime()) || birth > maxDate){
                 newErrors.birthdate = 'Debe tener mínimo 18 años';  
             }
         }
 
-        if (!formData.gender) {
+        if (!dataToValidate.gender) {
             newErrors.gender = 'Seleccione un género';
         }
 
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dataToValidate.email)) {
             newErrors.email = 'Correo electrónico inválido';
         }
             
-        if (!['Español', 'Inglés'].includes(formData.language)) {
+        if (!['Español', 'Inglés'].includes(dataToValidate.language)) {
             newErrors.language = 'Seleccione un idioma';
         }
             
@@ -130,24 +132,41 @@ export default function FormPersonalData() {
             value = value.replace(/\D/g, '');
         }
 
-        setFormData(prev => ({
-            ...prev,
-            [field]: value,
-        }));
+        setFormData(prev => {
+            const updated = { ...prev, [field]: value };
+            
+            setTimeout(() => {
+                const currentErrors = validateFormData(updated);
+                const isValid = Object.keys(currentErrors).length === 0;
+                setDataPValidate(isValid);
+                register(updated);
 
-        setErrors(prev => ({
-            ...prev,
-            [field]: undefined
-        }));
+                if (showPersonalErrors) {
+                    setErrors(currentErrors);
+                }
+            }, 0);
+
+            return updated;
+        });
     };
 
-    const isFormValid =
-        Object.keys(validateFormData()).length === 0;
+    useEffect(() => {
+        if (showPersonalErrors) {
+            const validationErrors = validateFormData();
+            setErrors(validationErrors);
+        }
+    }, [showPersonalErrors]);
 
     useEffect(() => {
-        setDataPValidate(isFormValid);
-        register(formData);
-    }, [formData, isFormValid, setDataPValidate, register]);
+        const timer = setTimeout(() => {
+            const validationErrors = validateFormData();
+            const isValid = Object.keys(validationErrors).length === 0;
+            setDataPValidate(isValid);
+            register(formData);
+        }, 0);
+
+        return () => clearTimeout(timer);
+    }, []);
 
     return (
         <KeyboardAvoidingView
@@ -188,6 +207,7 @@ export default function FormPersonalData() {
                             : 'Cargue su foto de perfil'}
                     </Text>
                 </TouchableOpacity>
+                {showPersonalErrors && errors.photoUri && <Text style={styles.errorText}>{errors.photoUri}</Text>}
 
                 {[
                     ['name', 'Nombre'],
@@ -209,7 +229,8 @@ export default function FormPersonalData() {
                                 >
                                     <View style={[
                                         styles.input,
-                                        styles.dateInputContainer
+                                        styles.dateInputContainer,
+                                        showPersonalErrors && errors[field] && styles.inputError
                                     ]}>
                                         <Text style={[
                                             styles.dateText,
@@ -219,6 +240,7 @@ export default function FormPersonalData() {
                                         </Text>
                                     </View>
                                 </TouchableOpacity>
+                                {showPersonalErrors && errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
 
                                 {showPicker && Platform.OS === 'ios' && (
                                     <Modal
@@ -286,7 +308,7 @@ export default function FormPersonalData() {
                         return (
                             <View key={field}>
                                 <TouchableOpacity
-                                    style={styles.input}
+                                    style={[styles.input, showPersonalErrors && errors[field] && styles.inputError]}
                                     onPress={() => setVisible(!visible)}
                                 >
                                     <Text style={{
@@ -295,6 +317,7 @@ export default function FormPersonalData() {
                                         {formData[field] || label} ▾
                                     </Text>
                                 </TouchableOpacity>
+                                {showPersonalErrors && errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
 
                                 {visible && options.map(option => (
                                     <TouchableOpacity
@@ -313,26 +336,28 @@ export default function FormPersonalData() {
                     }
 
                     return (
-                        <TextInput
-                            key={field}
-                            style={styles.input}
-                            placeholder={label}
-                            value={formData[field]}
-                            onChangeText={(value) => handleChange(field, value)}
-                            maxLength={
-                                field === 'name' ? 50 :
-                                field === 'idNumber' || field === 'phone' ? 10 :
-                                undefined
-                            }
-                            keyboardType={
-                                field === 'email' ? 'email-address' :
-                                field === 'phone' || field === 'idNumber'
-                                    ? 'number-pad' : 'default'
-                            }
-                            autoCapitalize={
-                                field === 'email' ? 'none' : 'sentences'
-                            }
-                        />
+                        <View key={field}>
+                            <TextInput
+                                style={[styles.input, showPersonalErrors && errors[field] && styles.inputError]}
+                                placeholder={label}
+                                value={formData[field]}
+                                onChangeText={(value) => handleChange(field, value)}
+                                maxLength={
+                                    field === 'name' ? 50 :
+                                    field === 'idNumber' || field === 'phone' ? 10 :
+                                    undefined
+                                }
+                                keyboardType={
+                                    field === 'email' ? 'email-address' :
+                                    field === 'phone' || field === 'idNumber'
+                                        ? 'number-pad' : 'default'
+                                }
+                                autoCapitalize={
+                                    field === 'email' ? 'none' : 'sentences'
+                                }
+                            />
+                            {showPersonalErrors && errors[field] && <Text style={styles.errorText}>{errors[field]}</Text>}
+                        </View>
                     );
                 })}
 
@@ -358,6 +383,15 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         padding: 12,
         backgroundColor: '#fff',
+    },
+    inputError: {
+        borderColor: '#ff3b30',
+    },
+    errorText: {
+        color: '#ff3b30',
+        fontSize: 12,
+        marginTop: 4,
+        marginLeft: 4,
     },
     dateInputContainer: {
         justifyContent: 'center',
@@ -413,7 +447,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         alignSelf: 'center',
         alignItems: 'center',
-        marginBottom: 10,
+        marginBottom: 2,
         width: 250,
     },
     buttonText: { color: '#fff', fontWeight: 'bold' },

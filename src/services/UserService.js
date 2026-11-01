@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const UserContext = createContext(null);
@@ -6,7 +5,10 @@ const UserContext = createContext(null);
 export function UserProvider({ children }) {
     const [dataRegister, setDataRegister] = useState({});
     const [dataPValidate, setDataPValidate] = useState(false);
-    
+
+    const [showPersonalErrors, setShowPersonalErrors] = useState(false);
+    const [showVehicleErrors, setShowVehicleErrors] = useState(false);
+
     const [dataVehicle, setDataVehicle] = useState({});
     const [dataCarValidate, setDataCarValidate] = useState(false);
 
@@ -16,8 +18,9 @@ export function UserProvider({ children }) {
 
     return (
         <UserContext.Provider
-            value={{ dataRegister, register, dataPValidate, setDataPValidate,
-                dataVehicle, setDataVehicle, dataCarValidate, setDataCarValidate
+            value={{ dataRegister, register, dataPValidate, setDataPValidate, showPersonalErrors, 
+                setShowPersonalErrors, showVehicleErrors, setShowVehicleErrors, dataVehicle, setDataVehicle, 
+                dataCarValidate, setDataCarValidate
              }}
         >
         {children}
