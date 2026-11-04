@@ -6,7 +6,7 @@ import { useVehicle } from '../../services/UserService';
 
 export default function VehicleScreen() {
   
-  const { dataVehicle, register, setDataCarValidate, showVehicleErrors } = useVehicle();
+  const { dataVehicle, registerVehicle, setDataCarValidate, showVehicleErrors } = useVehicle();
 
   const [showCategory, setShowCategory] = useState(false);
   const [showColor, setShowColor] = useState(false);
@@ -109,7 +109,7 @@ export default function VehicleScreen() {
             const currentErrors = validateFormData(updated);
             const isValid = Object.keys(currentErrors).length === 0;
             setDataCarValidate(isValid);
-            register(updated);
+            registerVehicle(updated);
 
             if (showVehicleErrors) {
                 setErrors(currentErrors);
@@ -132,7 +132,7 @@ export default function VehicleScreen() {
           const validationErrors = validateFormData();
           const isValid = Object.keys(validationErrors).length === 0;
           setDataCarValidate(isValid);
-          register(formData);
+          registerVehicle(formData);
       }, 0);
 
       return () => clearTimeout(timer);
