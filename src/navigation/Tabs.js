@@ -14,14 +14,17 @@ export default function RegisterTabs() {
 
   return (
     <Tab.Navigator
-      screenOptions={{
-        swipeEnabled: dataPValidate,
+      screenOptions={({ route }) => ({
+        swipeEnabled: route.name === 'Personal'
+          ? dataPValidate
+          : route.name === 'Vehicle'
+            ? dataCarValidate
+            : true,
         tabBarActiveTintColor: '#570376',
         tabBarInactiveTintColor: '#888888',
-        tabBarLabelStyle: {fontSize: 14, fontWeight: 'bold'},
-        tabBarIndicatorStyle: {backgroundColor: '#570376', height: 4},
-        swipeEnabled: dataPValidate,
-      }}
+        tabBarLabelStyle: { fontSize: 14, fontWeight: 'bold' },
+        tabBarIndicatorStyle: { backgroundColor: '#570376', height: 4 },
+      })}
     >
       <Tab.Screen
         name="Personal"
@@ -49,7 +52,10 @@ export default function RegisterTabs() {
         options={{ title: 'Documentos' }}
         listeners={{
           tabPress: (e) => {
-            if (!dataCarValidate) {
+            if (!dataPValidate) {
+              e.preventDefault();
+              setShowPersonalErrors(true);
+            } else if (!dataCarValidate) {
               e.preventDefault();
               setShowVehicleErrors(true);
             }
