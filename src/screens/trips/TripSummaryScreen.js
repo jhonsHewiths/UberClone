@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
@@ -22,69 +31,81 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
   const isCash = trip.paymentMethod === 'Efectivo';
 
   return (
-    <ScrollView style={styles.box} contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.successIcon}>
-          <Text style={styles.successCheck}>✓</Text>
-        </View>
-        <Text style={styles.summary}>Resumen del viaje</Text>
-        <Text style={styles.title}>Viaje finalizado</Text>
-        <Text style={styles.route}>{trip.origin} → {trip.destination}</Text>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.box}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.card}>
+            <View style={styles.successIcon}>
+              <Text style={styles.successCheck}>✓</Text>
+            </View>
+            <Text style={styles.summary}>Resumen del viaje</Text>
+            <Text style={styles.title}>Viaje finalizado</Text>
+            <Text style={styles.route}>{trip.origin} → {trip.destination}</Text>
 
-        <View style={styles.fareRow}>
-          <Text style={styles.rowLabel}>Tarifa del viaje</Text>
-          <Text style={styles.rowValue}>{formatMoney(trip.fare)}</Text>
-        </View>
-        <View style={styles.fareRow}>
-          <Text style={styles.rowLabel}>Comisión (20 %)</Text>
-          <Text style={styles.commission}>− {formatMoney(trip.commission)}</Text>
-        </View>
-        {trip.tip > 0 && (
-          <View style={styles.fareRow}>
-            <Text style={styles.rowLabel}>Propina</Text>
-            <Text style={styles.rowValue}>{formatMoney(trip.tip)}</Text>
-          </View>
-        )}
-        <View style={styles.netRow}>
-          <Text style={styles.netLabel}>Ganancia neta</Text>
-          <Text style={styles.netValue}>{formatMoney(trip.driverEarnings)}</Text>
-        </View>
+            <View style={styles.fareRow}>
+              <Text style={styles.rowLabel}>Tarifa del viaje</Text>
+              <Text style={styles.rowValue}>{formatMoney(trip.fare)}</Text>
+            </View>
+            <View style={styles.fareRow}>
+              <Text style={styles.rowLabel}>Comisión (20 %)</Text>
+              <Text style={styles.commission}>− {formatMoney(trip.commission)}</Text>
+            </View>
+            {trip.tip > 0 && (
+              <View style={styles.fareRow}>
+                <Text style={styles.rowLabel}>Propina</Text>
+                <Text style={styles.rowValue}>{formatMoney(trip.tip)}</Text>
+              </View>
+            )}
+            <View style={styles.netRow}>
+              <Text style={styles.netLabel}>Ganancia neta</Text>
+              <Text style={styles.netValue}>{formatMoney(trip.driverEarnings)}</Text>
+            </View>
 
-        <View style={styles.paymentBox}>
-          <Text style={styles.rowLabel}>Medio de pago: {trip.paymentMethod}</Text>
-          <Text
-            style={[
-              styles.paymentStatus,
-              trip.paymentStatus === 'Aprobado' || trip.paymentStatus === 'Efectivo'
-                ? styles.paid
-                : trip.paymentStatus === 'Rechazado'
-                  ? styles.rejected
-                  : styles.pending,
-            ]}
-          >
-            Estado: {trip.paymentStatus}
-          </Text>
-        </View>
-
-        {!paymentSolved && (
-          <View style={styles.actions}>
-            {isCash ? (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => solvePayment('Efectivo')}
-                disabled={loading}
+            <View style={styles.paymentBox}>
+              <Text style={styles.rowLabel}>Medio de pago: {trip.paymentMethod}</Text>
+              <Text
+                style={[
+                  styles.paymentStatus,
+                  trip.paymentStatus === 'Aprobado' || trip.paymentStatus === 'Efectivo'
+                    ? styles.paid
+                    : trip.paymentStatus === 'Rechazado'
+                      ? styles.rejected
+                      : styles.pending,
+                ]}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
+                Estado: {trip.paymentStatus}
+              </Text>
+            </View>
+
+            {!paymentSolved && (
+              <View style={styles.actions}>
+                {isCash ? (
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() => solvePayment('Efectivo')}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Confirmar efectivo recibido</Text>
+                    )}
+                  </TouchableOpacity>
                 ) : (
-                  <Text style={styles.primaryButtonText}>Confirmar efectivo recibido</Text>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <>
+                  <>
                 <TouchableOpacity
                   style={styles.primaryButton}
-                  onPress={() => resolvePayment('Aprobado')}
+                  onPress={() => solvePayment('Aprobado')}
                   disabled={loading}
                 >
                   {loading ? (
@@ -95,30 +116,35 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.secondaryButton}
-                  onPress={() => resolvePayment('Rechazado')}
+                  onPress={() => solvePayment('Rechazado')}
                   disabled={loading}
                 >
                   <Text style={styles.secondaryButtonText}>Pago rechazado</Text>
                 </TouchableOpacity>
-              </>
+                  </>
+                )}
+              </View>
+            )}
+
+            {paymentSolved && (
+              <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
+                <Text style={styles.primaryButtonText}>Volver al inicio</Text>
+              </TouchableOpacity>
             )}
           </View>
-        )}
-
-        {paymentSolved && (
-          <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
-            <Text style={styles.primaryButtonText}>Volver al inicio</Text>
-          </TouchableOpacity>
-        )}
+        </ScrollView>
       </View>
-    </ScrollView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   box: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: '#f3f1f5',
+  },
+  scrollView: {
+    flex: 1,
   },
   container: {
     flexGrow: 1,

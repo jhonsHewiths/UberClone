@@ -1,38 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
 export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip, onFinish}) {
   const [loading, setLoading] = useState(false);
   const isOnTrip = trip.stage === 'destination';
-  const routeCoordinates = isOnTrip
-    ? trip.destinationRoute || [trip.pickup, trip.dropoff]
-    : trip.pickupRoute || [driverLocation || trip.pickup, trip.pickup];
-  const [routeProgress, setRouteProgress] = useState(0);
-
-  useEffect(() => {
-    setRouteProgress(0);
-    const interval = setInterval(() => {
-      setRouteProgress((progress) => Math.min(progress + 0.05, routeCoordinates.length - 1));
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [routeCoordinates.length, trip.id, trip.stage]);
-
-  const count = Math.min(Math.floor(routeProgress), routeCoordinates.length - 2);
-  const progress = routeProgress - count;
-  const routePosition = {
-    latitude: routeCoordinates[count].latitude
-      + (routeCoordinates[count + 1].latitude - routeCoordinates[count].latitude) * progress,
-    longitude: routeCoordinates[count].longitude
-      + (routeCoordinates[count + 1].longitude - routeCoordinates[count].longitude) * progress,
-  };
-  const minLatitude = Math.min(...routeCoordinates.map((point) => point.latitude));
-  const maxLatitude = Math.max(...routeCoordinates.map((point) => point.latitude));
-  const minLongitude = Math.min(...routeCoordinates.map((point) => point.longitude));
-  const maxLongitude = Math.max(...routeCoordinates.map((point) => point.longitude));
+  const mapCoordinates = isOnTrip
+    ? [trip.pickup, trip.dropoff]
+    : [driverLocation || trip.pickup, trip.pickup];
+  const minLatitude = Math.min(...mapCoordinates.map((point) => point.latitude));
+  const maxLatitude = Math.max(...mapCoordinates.map((point) => point.latitude));
+  const minLongitude = Math.min(...mapCoordinates.map((point) => point.longitude));
+  const maxLongitude = Math.max(...mapCoordinates.map((point) => point.longitude));
   const region = {
     latitude: (minLatitude + maxLatitude) / 2,
     longitude: (minLongitude + maxLongitude) / 2,
@@ -54,19 +35,38 @@ export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip
 
   return (
     <View style={styles.container}>
-      <MapView style={StyleSheet.absoluteFill} initialRegion={region} region={region}>
-        <Polyline coordinates={routeCoordinates} strokeColor="#570376" strokeWidth={5} />
-        <Marker coordinate={routePosition} title="Vehículo" pinColor="#570376" />
-        <Marker coordinate={trip.pickup} title="Punto de recogida" pinColor="#28a745" />
-        <Marker coordinate={trip.dropoff} title="Destino" pinColor="#570376" />
+      <MapView
+        key={`${trip.id}-${trip.stage}`}
+        style={StyleSheet.absoluteFill}
+        initialRegion={region}
+      >
+        {driverLocation && (
+          <Marker coordinate={driverLocation} title="Tu ubicación">
+            <View style={styles.vehicleMarker}>
+              <Text style={styles.vehicleMarkerIcon}>🚗</Text>
+            </View>
+          </Marker>
+        )}
+        <Marker coordinate={trip.pickup} title="Punto de recogida">
+          <View style={styles.pickupMarker}>
+            <Text style={styles.markerLabel}>P</Text>
+          </View>
+        </Marker>
+        <Marker coordinate={trip.dropoff} title="Destino">
+          <View style={styles.destinationMarker}>
+            <Text style={styles.markerLabel}>D</Text>
+          </View>
+        </Marker>
       </MapView>
 
       <View style={styles.topCard}>
         <Text style={styles.startTrip}>Viaje en curso</Text>
-        <Text style={styles.title}>{isOnTrip ? 'Destino del pasajero' : 'Dirígete al pasajero'}</Text>
+        <Text style={styles.title}>
+          {isOnTrip ? 'Destino del pasajero' : 'Dirígete al punto de recogida'}
+        </Text>
         <Text style={styles.address}>{isOnTrip ? trip.destination : trip.origin}</Text>
         <Text style={styles.route}>
-          El vehículo se dirige al destino.
+          {isOnTrip ? 'Lleva al pasajero a su destino.' : 'Dirígete al punto de recogida.'}
         </Text>
       </View>
 
@@ -172,6 +172,45 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.7,
+  },
+  vehicleMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#570376',
+    borderWidth: 3,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+  },
+  vehicleMarkerIcon: {
+    fontSize: 20,
+  },
+  pickupMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#28a745',
+    borderWidth: 2,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  destinationMarker: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e65f36',
+    borderWidth: 2,
+    borderColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  markerLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   buttonText: {
     color: '#fff',

@@ -205,7 +205,7 @@ export default function FormPersonalData() {
                             <View key={field}>
                                 <TouchableOpacity
                                     style={[
-                                        styles.input, 
+                                        styles.input,
                                         showPersonalErrors && errors[field] && styles.inputError, 
                                         isSubmitted && styles.disabledInput
                                     ]}
@@ -213,7 +213,7 @@ export default function FormPersonalData() {
                                     disabled={isSubmitted}
                                 >
                                     <Text style={{ color: formData[field] ? '#000' : '#999' }}>
-                                        {formData[field] || label} ▾
+                                {formData[field] || label} ▾
                                     </Text>
                                 </TouchableOpacity>
                                 

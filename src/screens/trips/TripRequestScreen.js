@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
@@ -24,67 +24,75 @@ export default function TripRequestScreen({ request, onAccept, onReject }) {
   }, [onReject, request.id]);
 
   return (
-    <ScrollView style={styles.overlay} contentContainerStyle={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>SOLICITUD SIMULADA</Text>
-            <Text style={styles.title}>Nuevo viaje</Text>
-          </View>
-          <View style={styles.timer}>
-            <Text style={styles.timerNumber}>{secondsLeft}</Text>
-            <Text style={styles.timerLabel}>seg</Text>
-          </View>
-        </View>
+    <Modal
+      visible
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={() => onReject(false)}
+    >
+      <View style={styles.overlay}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.card}>
+            <View style={styles.header}>
+              <View>
+                <Text style={styles.eyebrow}>NUEVO SOLICITUD</Text>
+                <Text style={styles.title}>Nuevo viaje</Text>
+              </View>
+              <View style={styles.timer}>
+                <Text style={styles.timerNumber}>{secondsLeft}</Text>
+                <Text style={styles.timerLabel}>seg</Text>
+              </View>
+            </View>
 
-        <View style={styles.mockNotice}>
-          <Text style={styles.mockNoticeText}>
-            Solicitud de demostración: no corresponde a un pasajero real.
-          </Text>
-        </View>
+            <View style={styles.route}>
+              <View style={styles.routeLine}>
+                <View style={styles.pickupDot} />
+                <View style={styles.dash} />
+                <View style={styles.destinationDot} />
+              </View>
+              <View style={styles.addresses}>
+                <Text style={styles.label}>RECOGER EN</Text>
+                <Text style={styles.address}>{request.origin}</Text>
+                <Text style={[styles.label, styles.destinationLabel]}>DESTINO</Text>
+                <Text style={styles.address}>{request.destination}</Text>
+              </View>
+            </View>
 
-        <View style={styles.route}>
-          <View style={styles.routeLine}>
-            <View style={styles.pickupDot} />
-            <View style={styles.dash} />
-            <View style={styles.destinationDot} />
-          </View>
-          <View style={styles.addresses}>
-            <Text style={styles.label}>RECOGER EN</Text>
-            <Text style={styles.address}>{request.origin}</Text>
-            <Text style={[styles.label, styles.destinationLabel]}>DESTINO</Text>
-            <Text style={styles.address}>{request.destination}</Text>
-          </View>
-        </View>
+            <View style={styles.details}>
+              <Detail label="Distancia" value={`${request.distanceKm} km`} />
+              <Detail label="Duración aprox." value={`${request.durationMin} min`} />
+              <Detail label="Categoría" value={request.category} />
+              <Detail label="Pago" value={request.paymentMethod} />
+            </View>
 
-        <View style={styles.details}>
-          <Detail label="Distancia" value={`${request.distanceKm} km`} />
-          <Detail label="Duración aprox." value={`${request.durationMin} min`} />
-          <Detail label="Categoría" value={request.category} />
-          <Detail label="Pago" value={request.paymentMethod} />
-        </View>
+            <View style={styles.fareBox}>
+              <View>
+                <Text style={styles.label}>TARIFA ESTIMADA</Text>
+                <Text style={styles.fare}>{formatMoney(request.fare)}</Text>
+              </View>
+              <View style={styles.earnings}>
+                <Text style={styles.label}>GANANCIA NETA</Text>
+                <Text style={styles.net}>{formatMoney(request.driverEarnings)}</Text>
+              </View>
+            </View>
 
-        <View style={styles.fareBox}>
-          <View>
-            <Text style={styles.label}>TARIFA ESTIMADA</Text>
-            <Text style={styles.fare}>{formatMoney(request.fare)}</Text>
+            <View style={styles.buttons}>
+              <TouchableOpacity style={styles.rejectButton} onPress={() => onReject(false)}>
+                <Text style={styles.rejectText}>Rechazar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.acceptButton} onPress={onAccept}>
+                <Text style={styles.acceptText}>Aceptar viaje</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.earnings}>
-            <Text style={styles.label}>GANANCIA NETA</Text>
-            <Text style={styles.net}>{formatMoney(request.driverEarnings)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.buttons}>
-          <TouchableOpacity style={styles.rejectButton} onPress={() => onReject(false)}>
-            <Text style={styles.rejectText}>Rechazar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.acceptButton} onPress={onAccept}>
-            <Text style={styles.acceptText}>Aceptar viaje</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
-    </ScrollView>
+    </Modal>
   );
 }
 
@@ -99,8 +107,11 @@ function Detail({ label, value }) {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     backgroundColor: 'rgba(20, 10, 30, 0.55)',
+  },
+  scrollView: {
+    flex: 1,
   },
   container: {
     flexGrow: 1,
@@ -148,17 +159,6 @@ const styles = StyleSheet.create({
   timerLabel: {
     color: '#777',
     fontSize: 10,
-  },
-  mockNotice: {
-    backgroundColor: '#f4eff7',
-    borderRadius: 8,
-    padding: 9,
-    marginTop: 16,
-  },
-  mockNoticeText: {
-    color: '#570376',
-    fontSize: 11,
-    textAlign: 'center',
   },
   route: {
     flexDirection: 'row',

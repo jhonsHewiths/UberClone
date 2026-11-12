@@ -36,7 +36,8 @@ const createData = (personal, vehicle, documents) => ({
 });
 
 export default function ProfileScreen() {
-  const { statusAcc, dataDocument, dataRegister, dataVehicle, closeSec, updateProfile } = useRegister();
+  const { accountStatus: statusAcc, dataDocument, dataRegister, dataVehicle, logoutDriver: closeSec,
+    updateDriverProfile: updateProfile } = useRegister();
 
   const [formData, setFormData] = useState(() => (
     createData(dataRegister, dataVehicle, dataDocument)
@@ -75,7 +76,7 @@ export default function ProfileScreen() {
 
     setLoading(true);
     try {
-      await updateDriverProfile(formData);
+      await updateProfile(formData);
       Alert.alert('Perfil actualizado', 'Tus cambios se guardaron correctamente.');
     } catch (error) {
       console.error('Error al actualizar el perfil:', error);
@@ -109,7 +110,7 @@ export default function ProfileScreen() {
 
       <View style={styles.headerCard}>
         {formData.personal.photoUri ? (
-          <Image source={{ uri: formData.personal.photoUri }} style={styles.avatar} />
+          <Image source={{ uri: formData.personal.photoUri }} style={styles.photoPer} />
         ) : (
           <View style={[styles.photoPer, styles.photoPlaceholder]}>
             <Text style={styles.avatarInitial}>
@@ -122,11 +123,11 @@ export default function ProfileScreen() {
           <Text style={styles.email}>{formData.personal.email || 'Sin correo registrado'}</Text>
           <Text style={[
             styles.status,
-            statusAcc.trim().toLowerCase() === 'disponible'
+            (statusAcc || '').trim().toLowerCase() === 'disponible'
               ? styles.available
               : styles.unavailable,
           ]}>
-            {statusAcc.toUpperCase()}
+            {(statusAcc || 'No Disponible').toUpperCase()}
           </Text>
         </View>
       </View>
@@ -264,6 +265,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0e7f4',
   },
   photo: {
+    color: '#570376',
+    fontSize: 26,
+    fontWeight: 'bold',
+  },
+  avatarInitial: {
     color: '#570376',
     fontSize: 26,
     fontWeight: 'bold',
