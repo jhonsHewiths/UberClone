@@ -22,7 +22,13 @@
     },
     "plugins": [
       "expo-asset",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "El servicio de Uber necesita tu ubicación para mostrarte y compartirla cuando estés disponible."
+        }
+      ]
     ]
   }
 }

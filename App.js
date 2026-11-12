@@ -1,11 +1,44 @@
-
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import RegisterTabs from './src/navigation/Tabs';
-import { UserProvider } from './src/services/UserService';
+import DriverApp from './src/navigation/DriverApp';
+import { UserProvider, useRegister } from './src/services/UserService';
+
+function AppFlow() {
+  const { isApproved, isLoggedOut } = useRegister();
+  const [showHome, setShowHome] = useState(false);
+  const approvalAlertShown = useRef(false);
+
+  useEffect(() => {
+    if (isLoggedOut) {
+      approvalAlertShown.current = false;
+      setShowHome(false);
+    }
+  }, [isLoggedOut]);
+
+  useEffect(() => {
+    if (!isApproved || approvalAlertShown.current) return;
+
+    approvalAlertShown.current = true;
+    Alert.alert(
+      '¡Has sido aceptado!',
+      'Tu cuenta fue aprobada. Tu estado ahora es Disponible.',
+      [{ text: 'Continuar', onPress: () => setShowHome(true) }],
+      { cancelable: false }
+    );
+  }, [isApproved]);
+
+  return showHome
+    ? <DriverApp />
+    : (
+      <NavigationContainer>
+        <RegisterTabs />
+      </NavigationContainer>
+    );
+}
 
 export default function App() {
   return (
@@ -15,15 +48,13 @@ export default function App() {
           style={styles.container}
           edges={['top']}
         >
-          <NavigationContainer>
-            <RegisterTabs />
-          </NavigationContainer>
+          <AppFlow />
         </SafeAreaView>
       </UserProvider>
     </SafeAreaProvider>
   );
 }
-
+ 
 const styles = StyleSheet.create({
   container: {
     flex: 1,

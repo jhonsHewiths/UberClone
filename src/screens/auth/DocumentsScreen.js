@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import {
-  StyleSheet, ScrollView, TextInput, Text, View, KeyboardAvoidingView, Platform,
-  TouchableOpacity, Image, Alert, ActivityIndicator, Modal
-} from 'react-native';
+import { StyleSheet, ScrollView, TextInput, Text, View, KeyboardAvoidingView, Platform,
+  TouchableOpacity, Image, Alert, ActivityIndicator, Modal } from 'react-native';
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,15 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useDocument } from '../../services/UserService';
 
 export default function DocumentsScreen() {
-  const {
-    dataRegister,
-    dataVehicle,
-    dataDocument,
-    registerDocument,
-    saveCompleteRegistration,
-    isSubmitted,
-    accountStatus,
-  } = useDocument();
+  const { dataRegister, dataVehicle, dataDocument, registerDocument, saveCompleteRegistration, isSubmitted, accountStatus } = useDocument();
 
   const [errors, setErrors] = useState({});
   const [showPicker, setShowPicker] = useState(false);
@@ -81,8 +71,8 @@ export default function DocumentsScreen() {
   const selectImage = async (useCamera, fieldType) => {
     if (isSubmitted) return;
     try {
-      const permissionResult = useCamera 
-        ? await ImagePicker.requestCameraPermissionsAsync() 
+      const permissionResult = useCamera
+        ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
@@ -90,8 +80,8 @@ export default function DocumentsScreen() {
         return;
       }
 
-      const pickerResult = useCamera 
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 }) 
+      const pickerResult = useCamera
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 })
         : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.8 });
 
       if (!pickerResult.canceled && pickerResult.assets?.[0]?.uri) {
@@ -154,7 +144,7 @@ export default function DocumentsScreen() {
 
         <TouchableOpacity
           style={[styles.input, styles.dateInputContainer, errors.dateLC && styles.inputError, isSubmitted && styles.disabledInput]}
-          onPress={() => { if (!isSubmitted) { setActiveDateField('dateLC'); setShowPicker(true); }}}
+          onPress={() => { if (!isSubmitted) { setActiveDateField('dateLC'); setShowPicker(true); } }}
           disabled={isSubmitted}
         >
           <Text style={[styles.dateText, !formData.dateLC && styles.placeholderStyle]}>
@@ -174,7 +164,7 @@ export default function DocumentsScreen() {
         <Text style={[styles.sectionLabel, { marginTop: 15 }]}>SOAT</Text>
         <TouchableOpacity
           style={[styles.input, styles.dateInputContainer, errors.dateSOAT && styles.inputError, isSubmitted && styles.disabledInput]}
-          onPress={() => { if (!isSubmitted) { setActiveDateField('dateSOAT'); setShowPicker(true); }}}
+          onPress={() => { if (!isSubmitted) { setActiveDateField('dateSOAT'); setShowPicker(true); } }}
           disabled={isSubmitted}
         >
           <Text style={[styles.dateText, !formData.dateSOAT && styles.placeholderStyle]}>
@@ -194,7 +184,7 @@ export default function DocumentsScreen() {
         <Text style={[styles.sectionLabel, { marginTop: 15 }]}>Revisión Técnico-Mecánica</Text>
         <TouchableOpacity
           style={[styles.input, styles.dateInputContainer, errors.dateRT && styles.inputError, isSubmitted && styles.disabledInput]}
-          onPress={() => { if (!isSubmitted) { setActiveDateField('dateRT'); setShowPicker(true); }}}
+          onPress={() => { if (!isSubmitted) { setActiveDateField('dateRT'); setShowPicker(true); } }}
           disabled={isSubmitted}
         >
           <Text style={[styles.dateText, !formData.dateRT && styles.placeholderStyle]}>
@@ -223,7 +213,7 @@ export default function DocumentsScreen() {
         />
         {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => !isSubmitted && handleChange('terms', !formData.terms)}
           style={styles.checkboxRow}
           disabled={isSubmitted}
