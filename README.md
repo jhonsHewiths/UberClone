@@ -123,7 +123,47 @@ No copies esos valores en archivos del móvil, repositorio, AsyncStorage o
 `EXPO_PUBLIC_*`. `backend/.env` y `.env.local` están excluidos de Git.
 `.env.local` contiene únicamente la URL del backend para Expo, no credenciales.
 
-Este flujo es para la demo de clase. Antes de publicar, protege los endpoints
-con autenticación Firebase (el prototipo actual no inicia sesión con Firebase
-Auth) y define reglas de Firestore que limiten las lecturas/escrituras al dueño
-del viaje.
+# Bitácora de trabajo 
+
+https://share.gemini.google/tzNyjHeLcHqJ
+
+Registro de los cambios y verificaciones realizados hoy en UberClone junto con
+el asistente.
+
+## Trabajo realizado
+
+- Se diagnosticó la configuración de Google Routes API. La clave aparecía
+  habilitada y restringida a Routes API; también se confirmó que el teléfono
+  podía alcanzar el endpoint local `/health`.
+- Se configuró la URL del backend para Expo en `.env.local` usando la dirección
+  LAN del computador. Se recordó reiniciar Expo al cambiar variables.
+- Se cambió la pestaña inicial de la app a **Inicio**.
+- Se amplió a 15 segundos el tiempo disponible para responder a una solicitud de
+  viaje.
+- Se ajustó la pantalla de viaje activo para mostrar el progreso como
+  **“Dirigiéndose al punto de destino”**, encuadrar la ruta cuando el mapa está
+  listo y mantener visible el mapa activo a pantalla completa.
+- Se investigó por qué el botón cambiaba a **Finalizar viaje** sin mostrar la
+  ruta. Se confirmó que el cambio de etapa ocurría, pero el backend reportó
+  `fetch failed` al consultar Google Routes API. Se mejoró el log para incluir
+  la causa de red sin exponer la clave.
+- Se comprobó desde el computador la resolución DNS y conectividad HTTPS al
+  host de Google.
+- Se combinaron las variables que faltaban de `backend/.env.example` en
+  `backend/.env` sin mostrar ni sobrescribir los valores existentes. Las
+  variables añadidas quedaron vacías, salvo `PORT=4242`.
+- Se eliminaron los archivos de plantilla `.env.example` de la raíz y de
+  `backend/`, y se actualizaron las instrucciones del README. Se conservó
+  `.env.local` porque Expo lo carga para conocer la URL del backend.
+
+## Verificaciones realizadas
+
+- `npx expo export --platform ios` se ejecutó correctamente después de los
+  cambios de interfaz.
+- `node --check server.js` pasó.
+- `npm test` en `backend/` pasó: 2 pruebas, 0 fallos.
+- Se verificó que las variables esperadas existían en `backend/.env` sin
+  imprimir sus valores y que las plantillas `.env.example` ya no existían.
+
+
+
