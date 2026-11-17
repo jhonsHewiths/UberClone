@@ -12,9 +12,16 @@ import {
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
-export default function TripSummaryScreen({ trip, onSolvePayment, onStartPayment, onClose }) {
+export default function TripSummaryScreen({
+  trip,
+  onSolvePayment,
+  onStartPayment,
+  onVerifyPayment,
+  onClose,
+}) {
   const [loading, setLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   const solvePayment = async (status) => {
     setLoading(true);
@@ -34,6 +41,24 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onStartPayment
       await onStartPayment();
     } finally {
       setCheckoutLoading(false);
+    }
+  };
+
+  const verifyPayment = async () => {
+    setVerificationLoading(true);
+    try {
+      const result = await onVerifyPayment();
+      if (result.paymentStatus !== 'Aprobado') {
+        Alert.alert(
+          'Pago pendiente',
+          `Mercado Pago informa: ${result.paymentStatus}. Si acabas de pagar, espera unos segundos y vuelve a verificar.`
+        );
+      }
+    } catch (error) {
+      console.error('Error al verificar el pago:', error);
+      Alert.alert('No se pudo verificar el pago', error.message);
+    } finally {
+      setVerificationLoading(false);
     }
   };
 
@@ -124,6 +149,29 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onStartPayment
                       <Text style={styles.primaryButtonText}>Pagar con Mercado Pago</Text>
                     )}
                   </TouchableOpacity>
+                )}
+                {!isCash && (
+                  <>
+                    <Text style={styles.pendingNote}>
+                      Al regresar, la app verificará el pago. Si sigue pendiente, puedes volver a consultarlo.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={verifyPayment}
+                      disabled={verificationLoading}
+                    >
+                      {verificationLoading ? (
+                        <ActivityIndicator color="#570376" />
+                      ) : (
+                        <Text style={styles.verifyButtonText}>Verificar pago</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
+                      <Text style={styles.secondaryButtonText}>
+                        Volver al inicio sin confirmar
+                      </Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
             )}
@@ -272,14 +320,24 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#c82333',
+    borderColor: '#ccc',
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#c82333',
+    color: '#555',
     fontSize: 13,
     fontWeight: 'bold',
+  },
+  verifyButtonText: {
+    color: '#570376',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  pendingNote: {
+    color: '#777',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

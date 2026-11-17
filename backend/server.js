@@ -2,7 +2,12 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { toPaymentStatus, verifyWebhookSignature } from './paymentSecurity.js';
+import {
+  paymentMatchesTrip,
+  toPaymentStatus,
+  verifyWebhookSignature,
+} from './paymentSecurity.js';
+import { getOptionalCheckoutRedirects } from './paymentConfiguration.js';
 
 dotenv.config();
 
@@ -30,10 +35,16 @@ function getFirestoreDatabase() {
   return getFirestore();
 }
 
-function requireTestConfiguration() {
-  if (!process.env.MP_ACCESS_TOKEN?.startsWith('TEST-')) {
-    throw new Error('MP_ACCESS_TOKEN debe ser una credencial TEST- de Mercado Pago.');
+function requireMercadoPagoAccessToken() {
+  if (!process.env.MP_ACCESS_TOKEN?.startsWith('APP_USR')) {
+    throw new Error(
+      'MP_ACCESS_TOKEN debe ser un Access Token APP_USR de Credenciales > Prueba de Mercado Pago.'
+    );
   }
+}
+
+function requireTestConfiguration() {
+  requireMercadoPagoAccessToken();
   if (!process.env.MP_WEBHOOK_SECRET) {
     throw new Error('Configura MP_WEBHOOK_SECRET en backend/.env.');
   }
@@ -64,6 +75,23 @@ function tripDocument(driverId, tripId) {
     .doc(driverId)
     .collection('trips')
     .doc(tripId);
+}
+
+async function getMercadoPagoFailure(response) {
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  const causes = Array.isArray(data.cause) ? data.cause : [];
+  const codes = [
+    ...(typeof data.error === 'string' ? [data.error] : []),
+    ...causes.map((cause) => cause?.code),
+  ].filter((code) => typeof code === 'string' && /^[a-zA-Z0-9_.-]{1,60}$/.test(code));
+
+  return { status: response.status, codes: [...new Set(codes)] };
 }
 
 app.get('/health', (_request, response) => {
@@ -148,7 +176,7 @@ app.get('/api/maps/directions', async (request, response) => {
 
 app.post('/api/payments/create-preference', async (request, response) => {
   try {
-    requireTestConfiguration();
+    requireMercadoPagoAccessToken();
     const reference = getTripReference(request.body?.driverId, request.body?.tripId);
     if (!reference) {
       return response.status(400).json({ message: 'driverId y tripId son obligatorios.' });
@@ -199,13 +227,11 @@ app.post('/api/payments/create-preference', async (request, response) => {
           driver_id: reference.driverId,
           trip_id: reference.tripId,
         },
-        notification_url: `${paymentApiPublicUrl}/api/payments/webhook`,
-        back_urls: {
-          success: `${paymentApiPublicUrl}/api/payments/return?status=success`,
-          failure: `${paymentApiPublicUrl}/api/payments/return?status=failure`,
-          pending: `${paymentApiPublicUrl}/api/payments/return?status=pending`,
-        },
-        auto_return: 'approved',
+        ...getOptionalCheckoutRedirects({
+          publicUrl: paymentApiPublicUrl,
+          webhookSecret: process.env.MP_WEBHOOK_SECRET,
+          returnUrl: request.body?.returnUrl,
+        }),
       }),
     });
 
@@ -236,6 +262,183 @@ app.post('/api/payments/create-preference', async (request, response) => {
   } catch (error) {
     console.error('No se pudo crear el checkout:', error.message);
     return response.status(503).json({ message: error.message || 'No se pudo iniciar el pago.' });
+  }
+});
+
+app.post('/api/payments/verify-return', async (request, response) => {
+  try {
+    requireMercadoPagoAccessToken();
+    const reference = getTripReference(request.body?.driverId, request.body?.tripId);
+    const paymentId = request.body?.paymentId;
+    if (
+      !reference
+      || (
+        paymentId !== undefined
+        && (typeof paymentId !== 'string' || !/^\d{1,32}$/.test(paymentId))
+      )
+    ) {
+      return response.status(400).json({ message: 'La referencia del viaje o el pago no es válida.' });
+    }
+
+    const tripRef = tripDocument(reference.driverId, reference.tripId);
+    const tripSnapshot = await tripRef.get();
+    if (!tripSnapshot.exists) {
+      return response.status(404).json({ message: 'No se encontró el viaje.' });
+    }
+
+    const trip = tripSnapshot.data();
+    if (
+      (trip.status !== 'completed' && trip.status !== 'paid')
+      || trip.paymentMethod !== 'mercadopago'
+    ) {
+      return response.status(409).json({ message: 'El viaje no está listo para verificar el pago.' });
+    }
+
+    const expectedAmount = Math.round(Number(trip.total ?? (trip.fare + (trip.tip || 0))));
+    const expectedPayment = {
+      externalReference: `${reference.driverId}:${reference.tripId}`,
+      amount: expectedAmount,
+    };
+    const expectedPreferencePayment = {
+      preferenceId: trip.preferenceId,
+      amount: expectedAmount,
+    };
+    let payment;
+    let paymentLookupFailure;
+    const lookupSummary = {
+      paymentSearchResults: 0,
+      referenceMatches: 0,
+      merchantOrders: 0,
+      preferencePayments: 0,
+      preferenceMatches: 0,
+    };
+
+    if (paymentId) {
+      const paymentResponse = await fetch(
+        `${mercadoPagoApi}/v1/payments/${encodeURIComponent(paymentId)}`,
+        { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } }
+      );
+      if (paymentResponse.ok) {
+        const paymentData = await paymentResponse.json();
+        if (paymentMatchesTrip(paymentData, expectedPayment)) payment = paymentData;
+      } else {
+        paymentLookupFailure = await getMercadoPagoFailure(paymentResponse);
+      }
+    }
+
+    if (!payment) {
+      const searchUrl = `${mercadoPagoApi}/v1/payments/search?${new URLSearchParams({
+        external_reference: `${reference.driverId}:${reference.tripId}`,
+        sort: 'date_created',
+        criteria: 'desc',
+        limit: '20',
+      })}`;
+      const searchResponse = await fetch(searchUrl, {
+        headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+      });
+      if (!searchResponse.ok) {
+        const failure = await getMercadoPagoFailure(searchResponse);
+        console.error('Mercado Pago rechazó la búsqueda del pago:', failure);
+        const codes = failure.codes.length ? ` (${failure.codes.join(', ')})` : '';
+        return response.status(502).json({
+          message: `Mercado Pago respondió HTTP ${failure.status}${codes}.`,
+        });
+      }
+
+      const searchData = await searchResponse.json();
+      const searchResults = Array.isArray(searchData.results) ? searchData.results : [];
+      const payments = searchResults
+        .filter((item) => paymentMatchesTrip(item, expectedPayment));
+      lookupSummary.paymentSearchResults = searchResults.length;
+      lookupSummary.referenceMatches = payments.length;
+      payment = payments.find((item) => item.status === 'approved') || payments[0];
+    }
+
+    let preferenceLookupFailure;
+    if (!payment && trip.preferenceId) {
+      const ordersUrl = `${mercadoPagoApi}/merchant_orders/search?${new URLSearchParams({
+        preference_id: String(trip.preferenceId),
+      })}`;
+      const ordersResponse = await fetch(ordersUrl, {
+        headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+      });
+
+      if (ordersResponse.ok) {
+        const ordersData = await ordersResponse.json();
+        const orders = Array.isArray(ordersData.elements)
+          ? ordersData.elements
+          : Array.isArray(ordersData.results) ? ordersData.results : [];
+        const paymentIds = [...new Set(
+          orders
+            .flatMap((order) => (Array.isArray(order.payments) ? order.payments : []))
+            .map((item) => String(item.id || item.payment_id || ''))
+            .filter((id) => /^\d{1,32}$/.test(id))
+        )];
+        lookupSummary.merchantOrders = orders.length;
+        lookupSummary.preferencePayments = paymentIds.length;
+        const preferencePayments = [];
+
+        for (const id of paymentIds) {
+          const paymentResponse = await fetch(
+            `${mercadoPagoApi}/v1/payments/${encodeURIComponent(id)}`,
+            { headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` } }
+          );
+          if (!paymentResponse.ok) {
+            preferenceLookupFailure = await getMercadoPagoFailure(paymentResponse);
+            continue;
+          }
+
+          const paymentData = await paymentResponse.json();
+          if (paymentMatchesTrip(paymentData, expectedPreferencePayment)) {
+            preferencePayments.push(paymentData);
+          }
+        }
+
+        lookupSummary.preferenceMatches = preferencePayments.length;
+        payment = preferencePayments.find((item) => item.status === 'approved')
+          || preferencePayments[0];
+      } else {
+        preferenceLookupFailure = await getMercadoPagoFailure(ordersResponse);
+      }
+    }
+
+    if (!payment) {
+      console.warn('No se encontró el pago en las búsquedas de Mercado Pago:', lookupSummary);
+      if (paymentLookupFailure) {
+        console.warn('El ID recibido no permitió consultar el pago; se buscó por viaje:', paymentLookupFailure);
+      }
+      if (preferenceLookupFailure) {
+        console.warn('No se pudo completar la búsqueda del pago por preferencia:', preferenceLookupFailure);
+        if (preferenceLookupFailure.status !== 404) {
+          const codes = preferenceLookupFailure.codes.length
+            ? ` (${preferenceLookupFailure.codes.join(', ')})`
+            : '';
+          return response.status(502).json({
+            message: `Mercado Pago respondió HTTP ${preferenceLookupFailure.status}${codes}.`,
+          });
+        }
+      }
+      return response.status(404).json({
+        message: 'Mercado Pago aún no encontró un pago asociado a este viaje.',
+      });
+    }
+    if (!paymentMatchesTrip(payment, expectedPayment)) {
+      return response.status(409).json({ message: 'El pago no coincide con los datos del viaje.' });
+    }
+
+    const paymentStatus = toPaymentStatus(payment.status);
+    const update = {
+      paymentStatus,
+      paymentId: String(payment.id),
+      paymentUpdatedAt: FieldValue.serverTimestamp(),
+    };
+    if (paymentStatus === 'Aprobado') update.status = 'paid';
+    await tripRef.update(update);
+
+    return response.json({ paymentStatus, status: update.status || trip.status });
+  } catch (error) {
+    console.error('No se pudo verificar el pago al regresar de Mercado Pago:', error.message);
+    return response.status(503).json({ message: 'No se pudo verificar el pago.' });
   }
 });
 
@@ -284,12 +487,11 @@ app.post('/api/payments/webhook', async (request, response) => {
       return response.sendStatus(200);
     }
     const expectedAmount = Math.round(Number(trip.total ?? (trip.fare + (trip.tip || 0))));
-    if (
-      trip.paymentMethod !== 'mercadopago'
-      || (trip.preferenceId && String(payment.preference_id) !== trip.preferenceId)
-      || Math.round(Number(payment.transaction_amount)) !== expectedAmount
-      || payment.currency_id !== 'COP'
-    ) {
+    if (!paymentMatchesTrip(payment, {
+      externalReference: `${reference.driverId}:${reference.tripId}`,
+      preferenceId: trip.preferenceId,
+      amount: expectedAmount,
+    })) {
       console.warn('Se ignoró una notificación que no coincide con los datos del viaje.');
       return response.sendStatus(200);
     }

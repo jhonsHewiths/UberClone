@@ -27,24 +27,30 @@ src/
 
 1. En Mercado Pago Developers, crea un usuario de prueba vendedor y otro
    comprador. Usa las **credenciales de prueba** del vendedor; el access token
-   debe empezar con `TEST-`. Para pagar, inicia sesión en Checkout Pro con el
-   comprador de prueba y usa una tarjeta de prueba de la documentación de
-   Mercado Pago.
+   de esta integración empieza con `APP_USR`; verifica que el selector de
+   ambiente diga **Prueba**, porque las credenciales de producción también
+   pueden usar ese prefijo. Para pagar, inicia sesión en Checkout Pro con el
+   comprador de prueba y usa un medio de pago de prueba de Mercado Pago.
 2. Abre `backend/.env` y completa las variables que tengas disponibles:
    - `MP_ACCESS_TOKEN`: access token de prueba del vendedor.
-   - `MP_WEBHOOK_SECRET`: clave secreta de firma que Mercado Pago muestra al
-     configurar notificaciones Webhooks.
-   - `PAYMENT_API_PUBLIC_URL`: URL HTTPS pública del backend, sin `/` final.
+   - `MP_WEBHOOK_SECRET`: clave de firma de Webhooks; solo hace falta para
+     confirmar automáticamente los pagos en la app.
+   - `PAYMENT_API_PUBLIC_URL`: URL HTTPS pública del backend, sin `/` al final;
+     solo hace falta para configurar retornos y notificaciones automáticas.
    - `GOOGLE_APPLICATION_CREDENTIALS`: ruta absoluta a un JSON de cuenta de
      servicio de Firebase Admin. Guarda ese JSON fuera del repositorio.
    - `GOOGLE_MAPS_API_KEY`: clave de servidor con Routes API habilitada.
      No la pongas en `EXPO_PUBLIC_*`.
-3. Para desarrollo local, expón el puerto 4242 con un túnel HTTPS (por ejemplo,
-   `ngrok http 4242`) y configura la URL resultante como
-   `PAYMENT_API_PUBLIC_URL`. En Mercado Pago Developers, registra esa URL con
-   `/api/payments/webhook` como notificación Webhook para pagos y copia la clave
-   de firma en `MP_WEBHOOK_SECRET`. El túnel debe permanecer activo durante la
-   prueba.
+3. Para probar únicamente la apertura y el checkout de prueba, basta con
+   `MP_ACCESS_TOKEN`; deja `MP_WEBHOOK_SECRET` y `PAYMENT_API_PUBLIC_URL` vacíos.
+   La app configura una URL de retorno profunda y, al regresar de Checkout Pro,
+   el backend consulta a Mercado Pago y valida la referencia, preferencia, monto
+   y moneda antes de actualizarlo. Expo Go usa un enlace `exp://`; una app
+   instalada usa el esquema `uberclone://`.
+   Para usar además un webhook, expón el puerto 4242 con una URL HTTPS pública,
+   configúrala en `PAYMENT_API_PUBLIC_URL`, registra
+   `/api/payments/webhook` en Mercado Pago y guarda la clave de firma en
+   `MP_WEBHOOK_SECRET`.
 4. Configura `EXPO_PUBLIC_PAYMENT_API_URL` en `.env.local` en la raíz con la
    dirección que alcanza el teléfono:
    - Expo Web / simulador iOS: `http://localhost:4242`
@@ -107,11 +113,13 @@ resumen de ganancias en su pestaña independiente.
    `users/{driverId}/trips/{tripId}`. El importe se toma de ese documento en el
    backend; no se acepta un monto enviado por el móvil.
 2. El conductor elige **Pagar con Mercado Pago**. La app solo envía `driverId`
-   y `tripId`, y abre la URL de Checkout Pro que devuelve el backend.
+   y `tripId`, más su enlace profundo de retorno, y abre Checkout Pro.
 3. El comprador de prueba completa el checkout con medios de pago de prueba.
-4. Mercado Pago llama al webhook. El backend verifica la firma, consulta el
-   pago directamente a Mercado Pago y comprueba referencia, monto y moneda
-   antes de guardar `paymentStatus`, `paymentId` y `status: paid` en Firestore.
+4. Al volver del checkout, la app envía al backend el ID de pago recibido en el
+   enlace de retorno. El backend consulta el pago directamente a Mercado Pago y
+   comprueba referencia, preferencia, monto y moneda antes de guardar
+   `paymentStatus`, `paymentId` y `status: paid` en Firestore. El webhook firmado
+   sigue disponible como alternativa.
 5. La pantalla de resumen escucha el documento del viaje en tiempo real. Un
    pago rechazado queda como rechazado y permite iniciar otro intento; no se
    marca manualmente como aprobado desde la app.

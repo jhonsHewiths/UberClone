@@ -35,3 +35,12 @@ export function toPaymentStatus(status) {
   if (status === 'rejected' || status === 'cancelled') return 'Rechazado';
   return 'Pendiente';
 }
+
+export function paymentMatchesTrip(payment, { externalReference, preferenceId, amount }) {
+  return (
+    (!externalReference || String(payment.external_reference || '') === externalReference)
+    && (!preferenceId || String(payment.preference_id) === preferenceId)
+    && Math.round(Number(payment.transaction_amount)) === amount
+    && payment.currency_id === 'COP'
+  );
+}
