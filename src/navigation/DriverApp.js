@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Modal, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -8,22 +8,38 @@ import HomeScreen from '../screens/home/Home';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import ActiveTripScreen from '../screens/trips/ActiveTripScreen';
 import TripRequestScreen from '../screens/trips/TripRequestScreen';
+import TripHistoryScreen from '../screens/trips/TripHistoryScreen';
 import TripSummaryScreen from '../screens/trips/TripSummaryScreen';
 import { useRegister } from '../services/UserService';
+import { createTripCheckout } from '../services/PaymentService';
 
 const Tab = createBottomTabNavigator();
 
 export default function DriverApp() {
-  const { accountStatus, pendingRequest, activeTrip, completedTrip, driverLocation, requestMessage,
+  const { accountStatus, pendingRequest, activeTrip, completedTrip, driverLocation, userDocumentId,
     createMockRequest: createRequest,
     acceptMockRequest: acceptRequest,
     rejectMockRequest: rejectRequest,
     markPassengerOnboard: PassengerTrip,
+    updateActiveTripNavigation,
     finishMockTrip: finishTrip,
     resolveMockPayment: solvePayment,
     dismissCompletedTrip,
   } = useRegister();
   const isAvailable = accountStatus.trim().toLowerCase() === 'disponible';
+
+  const startPayment = async () => {
+    try {
+      const checkoutUrl = await createTripCheckout({
+        driverId: userDocumentId,
+        tripId: completedTrip.firestoreId,
+      });
+      await Linking.openURL(checkoutUrl);
+    } catch (error) {
+      console.error('Error al iniciar el pago con Mercado Pago:', error);
+      Alert.alert('No se pudo iniciar el pago', error.message);
+    }
+  };
 
   useEffect(() => {
     if (!isAvailable || pendingRequest || activeTrip || completedTrip) return undefined;
@@ -36,6 +52,7 @@ export default function DriverApp() {
     <NavigationContainer>
       <View style={styles.container}>
         <Tab.Navigator
+          initialRouteName="Inicio"
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: '#570376',
@@ -43,6 +60,15 @@ export default function DriverApp() {
             tabBarLabelStyle: { fontWeight: 'bold', fontSize: 12 },
           }}
         >
+          <Tab.Screen
+            name="Historial"
+            component={TripHistoryScreen}
+            options={{
+              tabBarIcon: ({ color }) => (
+                <Text style={[styles.homeIcon, { color }]}>↻</Text>
+              ),
+            }}
+          />
           <Tab.Screen
             name="Inicio"
             component={HomeScreen}
@@ -91,20 +117,27 @@ export default function DriverApp() {
         )}
 
         {activeTrip && (
-          <View style={styles.overlay}>
+          <Modal
+            visible
+            animationType="none"
+            presentationStyle="fullScreen"
+            onRequestClose={() => {}}
+          >
             <ActiveTripScreen
               trip={activeTrip}
               driverLocation={driverLocation}
               onPassengerTrip={PassengerTrip}
               onFinish={finishTrip}
+              onRouteLoaded={updateActiveTripNavigation}
             />
-          </View>
+          </Modal>
         )}
 
         {completedTrip && (
           <TripSummaryScreen
             trip={completedTrip}
             onSolvePayment={solvePayment}
+            onStartPayment={startPayment}
             onClose={dismissCompletedTrip}
           />
         )}
@@ -117,10 +150,6 @@ export default function DriverApp() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#fff',
   },
   homeIcon: {
     fontSize: 27,

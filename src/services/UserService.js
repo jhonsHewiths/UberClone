@@ -93,6 +93,34 @@ export function UserProvider({ children }) {
     }, [userDocumentId]);
 
     useEffect(() => {
+        if (!userDocumentId || !completedTrip?.firestoreId) return undefined;
+
+        const tripId = completedTrip.firestoreId;
+        return onSnapshot(
+            doc(db, 'users', userDocumentId, 'trips', tripId),
+            (snapshot) => {
+                if (!snapshot.exists()) return;
+
+                const tripData = snapshot.data();
+                setCompletedTrip((trip) => (
+                    trip?.firestoreId === tripId
+                        ? {
+                            ...trip,
+                            paymentStatus: tripData.paymentStatus,
+                            paymentId: tripData.paymentId ?? null,
+                            preferenceId: tripData.preferenceId ?? null,
+                            status: tripData.status,
+                        }
+                        : trip
+                ));
+            },
+            (error) => {
+                console.error('Error al sincronizar el pago del viaje:', error);
+            }
+        );
+    }, [completedTrip?.firestoreId, userDocumentId]);
+
+    useEffect(() => {
         if (!userDocumentId) return undefined;
 
         return onSnapshot(
@@ -254,7 +282,7 @@ export function UserProvider({ children }) {
         const durationMin = Math.max(5, Math.round(distanceKm * 2.5));
         const categories = ['Económico', 'XL', 'Premium'];
         const category = categories[RequestNumber.current % categories.length];
-        const paymentMethod = RequestNumber.current % 2 === 0 ? 'Tarjeta' : 'Efectivo';
+        const paymentMethod = RequestNumber.current % 2 === 0 ? 'mercadopago' : 'cash';
         const fare = calculateFare({
             distanceKm,
             durationMin,
@@ -309,6 +337,12 @@ export function UserProvider({ children }) {
         ));
     }, []);
 
+    const updateActiveTripNavigation = useCallback((navigationData) => {
+        setActiveTrip((trip) => (
+            trip ? { ...trip, ...navigationData } : trip
+        ));
+    }, []);
+
     const finishMockTrip = useCallback(async () => {
         if (!activeTrip || !userDocumentId) {
             throw new Error('No se pudo guardar el viaje.');
@@ -325,6 +359,9 @@ export function UserProvider({ children }) {
             collection(db, 'users', userDocumentId, 'trips'),
             {
                 ...tripData,
+                passengerId: activeTrip.passengerId || 'mock-passenger',
+                rating: activeTrip.rating ?? null,
+                createdAt: serverTimestamp(),
                 completedAt: serverTimestamp(),
             }
         );
@@ -339,14 +376,22 @@ export function UserProvider({ children }) {
             throw new Error('No se pudo actualizar el pago del viaje.');
         }
 
+        if (paymentStatus !== 'Efectivo' || completedTrip.paymentMethod !== 'cash') {
+            throw new Error('Los pagos con tarjeta solo se confirman desde Mercado Pago.');
+        }
+
         await updateDoc(
             doc(db, 'users', userDocumentId, 'trips', completedTrip.firestoreId),
-            { paymentStatus, paymentUpdatedAt: serverTimestamp() }
+            {
+                paymentStatus,
+                status: 'paid',
+                paymentUpdatedAt: serverTimestamp(),
+            }
         );
-        setCompletedTrip((trip) => ({ ...trip, paymentStatus }));
+        setCompletedTrip((trip) => ({ ...trip, paymentStatus, status: 'paid' }));
         setTripHistory((trips) => trips.map((trip) => (
             trip.firestoreId === completedTrip.firestoreId
-                ? { ...trip, paymentStatus }
+                ? { ...trip, paymentStatus, status: 'paid' }
                 : trip
         )));
     }, [completedTrip, userDocumentId]);
@@ -428,6 +473,7 @@ export function UserProvider({ children }) {
                 isLoggedOut,
                 accountStatus, setAccountStatus,
                 isApproved,
+                userDocumentId,
                 setDriverAvailability,
                 updateDriverProfile,
                 logoutDriver,
@@ -442,6 +488,7 @@ export function UserProvider({ children }) {
                 acceptMockRequest,
                 rejectMockRequest,
                 markPassengerOnboard,
+                updateActiveTripNavigation,
                 finishMockTrip,
                 resolveMockPayment,
                 dismissCompletedTrip,

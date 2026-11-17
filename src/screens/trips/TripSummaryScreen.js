@@ -12,8 +12,9 @@ import {
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
-export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
+export default function TripSummaryScreen({ trip, onSolvePayment, onStartPayment, onClose }) {
   const [loading, setLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const solvePayment = async (status) => {
     setLoading(true);
@@ -27,8 +28,18 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
     }
   };
 
-  const paymentSolved = trip.paymentStatus !== 'Pendiente';
-  const isCash = trip.paymentMethod === 'Efectivo';
+  const startPayment = async () => {
+    setCheckoutLoading(true);
+    try {
+      await onStartPayment();
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const paymentSolved = trip.paymentStatus === 'Aprobado' || trip.paymentStatus === 'Efectivo';
+  const isCash = trip.paymentMethod === 'cash';
+  const paymentMethodLabel = isCash ? 'Efectivo' : 'Mercado Pago';
 
   return (
     <Modal
@@ -72,7 +83,7 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
             </View>
 
             <View style={styles.paymentBox}>
-              <Text style={styles.rowLabel}>Medio de pago: {trip.paymentMethod}</Text>
+              <Text style={styles.rowLabel}>Medio de pago: {paymentMethodLabel}</Text>
               <Text
                 style={[
                   styles.paymentStatus,
@@ -102,26 +113,17 @@ export default function TripSummaryScreen({ trip, onSolvePayment, onClose }) {
                     )}
                   </TouchableOpacity>
                 ) : (
-                  <>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => solvePayment('Aprobado')}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Pago aprobado</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => solvePayment('Rechazado')}
-                  disabled={loading}
-                >
-                  <Text style={styles.secondaryButtonText}>Pago rechazado</Text>
-                </TouchableOpacity>
-                  </>
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={startPayment}
+                    disabled={checkoutLoading}
+                  >
+                    {checkoutLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Pagar con Mercado Pago</Text>
+                    )}
+                  </TouchableOpacity>
                 )}
               </View>
             )}

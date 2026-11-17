@@ -2,15 +2,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
+const REQUEST_TIMEOUT_SECONDS = 15;
 
 export default function TripRequestScreen({ request, onAccept, onReject }) {
-  const [secondsLeft, setSecondsLeft] = useState(10);
+  const [secondsLeft, setSecondsLeft] = useState(REQUEST_TIMEOUT_SECONDS);
   const expired = useRef(false);
 
   useEffect(() => {
+    expired.current = false;
+    setSecondsLeft(REQUEST_TIMEOUT_SECONDS);
     const startedAt = Date.now();
     const timer = setInterval(() => {
-      const remaining = Math.max(0, 10 - Math.floor((Date.now() - startedAt) / 1000));
+      const remaining = Math.max(
+        0,
+        REQUEST_TIMEOUT_SECONDS - Math.floor((Date.now() - startedAt) / 1000)
+      );
       setSecondsLeft(remaining);
 
       if (remaining === 0 && !expired.current) {
@@ -67,7 +73,10 @@ export default function TripRequestScreen({ request, onAccept, onReject }) {
               <Detail label="Distancia" value={`${request.distanceKm} km`} />
               <Detail label="Duración aprox." value={`${request.durationMin} min`} />
               <Detail label="Categoría" value={request.category} />
-              <Detail label="Pago" value={request.paymentMethod} />
+              <Detail
+                label="Pago"
+                value={request.paymentMethod === 'mercadopago' ? 'Mercado Pago' : 'Efectivo'}
+              />
             </View>
 
             <View style={styles.fareBox}>

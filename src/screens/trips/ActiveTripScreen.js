@@ -1,15 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
+import { getDrivingRoute } from '../../services/MapsService';
+import { getPointAlongRoute } from '../../utils/getPointAlongRoute';
 
 const formatMoney = (value) => `$${Math.round(value || 0).toLocaleString('es-CO')} COP`;
 
-export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip, onFinish}) {
+export default function ActiveTripScreen({
+  trip,
+  driverLocation,
+  onPassengerTrip,
+  onFinish,
+  onRouteLoaded,
+}) {
   const [loading, setLoading] = useState(false);
+  const [route, setRoute] = useState(null);
+  const [routeError, setRouteError] = useState('');
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [simulatedLocation, setSimulatedLocation] = useState(null);
+  const [simulationProgress, setSimulationProgress] = useState(0);
+  const [mapReady, setMapReady] = useState(false);
+  const mapRef = useRef(null);
+  const latestDriverLocation = useRef(driverLocation);
+  latestDriverLocation.current = driverLocation;
   const isOnTrip = trip.stage === 'destination';
-  const mapCoordinates = isOnTrip
-    ? [trip.pickup, trip.dropoff]
-    : [driverLocation || trip.pickup, trip.pickup];
+  const routeCoordinates = route?.coordinates || [];
+  const markerLocation = isOnTrip
+    ? simulatedLocation || routeCoordinates[0] || trip.pickup
+    : driverLocation || trip.pickup;
+  const mapCoordinates = routeCoordinates.length > 1
+    ? routeCoordinates
+    : isOnTrip
+      ? [trip.pickup, trip.dropoff]
+      : [markerLocation, trip.pickup];
   const minLatitude = Math.min(...mapCoordinates.map((point) => point.latitude));
   const maxLatitude = Math.max(...mapCoordinates.map((point) => point.latitude));
   const minLongitude = Math.min(...mapCoordinates.map((point) => point.longitude));
@@ -20,6 +43,70 @@ export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip
     latitudeDelta: Math.max((maxLatitude - minLatitude) * 1.4, 0.025),
     longitudeDelta: Math.max((maxLongitude - minLongitude) * 1.4, 0.025),
   };
+
+  useEffect(() => {
+    let active = true;
+    const origin = isOnTrip
+      ? trip.pickup
+      : latestDriverLocation.current || trip.pickup;
+    const destination = isOnTrip ? trip.dropoff : trip.pickup;
+
+    setRoute(null);
+    setRouteError('');
+    setRouteLoading(true);
+    setSimulatedLocation(null);
+    setSimulationProgress(0);
+
+    getDrivingRoute(origin, destination)
+      .then((result) => {
+        if (!active) return;
+        setRoute(result);
+        if (isOnTrip) {
+          onRouteLoaded?.({
+            routeCoordinates: result.coordinates,
+            routeDistanceKm: result.distanceKm,
+            routeDurationMin: result.durationMin,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error('Error al obtener la ruta de Google Maps:', error);
+        if (active) setRouteError(error.message);
+      })
+      .finally(() => {
+        if (active) setRouteLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [trip.id, trip.stage]);
+
+  useEffect(() => {
+    if (!isOnTrip || routeCoordinates.length < 2) {
+      setSimulatedLocation(null);
+      setSimulationProgress(0);
+      return undefined;
+    }
+
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const progress = Math.min((Date.now() - startedAt) / 10000, 1);
+      setSimulationProgress(progress);
+      setSimulatedLocation(getPointAlongRoute(routeCoordinates, progress));
+      if (progress === 1) clearInterval(timer);
+    }, 100);
+
+    return () => clearInterval(timer);
+  }, [isOnTrip, routeCoordinates]);
+
+  useEffect(() => {
+    if (!mapReady || routeCoordinates.length < 2) return;
+    mapRef.current?.fitToCoordinates(routeCoordinates, {
+      edgePadding: { top: 150, right: 60, bottom: 220, left: 60 },
+      animated: true,
+    });
+  }, [mapReady, routeCoordinates]);
 
   const finishTrip = async () => {
     setLoading(true);
@@ -36,17 +123,27 @@ export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip
   return (
     <View style={styles.container}>
       <MapView
-        key={`${trip.id}-${trip.stage}`}
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         initialRegion={region}
+        onMapReady={() => setMapReady(true)}
       >
-        {driverLocation && (
-          <Marker coordinate={driverLocation} title="Tu ubicación">
-            <View style={styles.vehicleMarker}>
-              <Text style={styles.vehicleMarkerIcon}>🚗</Text>
-            </View>
-          </Marker>
+        {routeCoordinates.length > 1 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeColor="#570376"
+            strokeWidth={5}
+          />
         )}
+        <Marker
+          coordinate={markerLocation}
+          title="Tu ubicación"
+          tracksViewChanges
+        >
+          <View style={styles.vehicleMarker}>
+            <Text style={styles.vehicleMarkerIcon}>🚗</Text>
+          </View>
+        </Marker>
         <Marker coordinate={trip.pickup} title="Punto de recogida">
           <View style={styles.pickupMarker}>
             <Text style={styles.markerLabel}>P</Text>
@@ -59,18 +156,31 @@ export default function ActiveTripScreen({ trip, driverLocation, onPassengerTrip
         </Marker>
       </MapView>
 
-      <View style={styles.topCard}>
+      <View style={styles.topCard} pointerEvents="box-none">
         <Text style={styles.startTrip}>Viaje en curso</Text>
         <Text style={styles.title}>
           {isOnTrip ? 'Destino del pasajero' : 'Dirígete al punto de recogida'}
         </Text>
         <Text style={styles.address}>{isOnTrip ? trip.destination : trip.origin}</Text>
-        <Text style={styles.route}>
-          {isOnTrip ? 'Lleva al pasajero a su destino.' : 'Dirígete al punto de recogida.'}
+        <Text style={[styles.route, routeError && styles.routeError]}>
+          {routeError
+            ? routeError
+            : routeLoading
+              ? 'Calculando ruta con Google Maps...'
+              : route
+                ? `${route.distanceKm.toFixed(1)} km • ${route.durationMin} min por carretera`
+                : isOnTrip
+                  ? 'Lleva al pasajero a su destino.'
+                  : 'Dirígete al punto de recogida.'}
         </Text>
+        {isOnTrip && routeCoordinates.length > 1 && (
+          <Text style={styles.simulation}>
+            Dirigiéndose al punto de destino · {Math.round(simulationProgress * 100)}%
+          </Text>
+        )}
       </View>
 
-      <View style={styles.bottomCard}>
+      <View style={styles.bottomCard} pointerEvents="box-none">
         <View style={styles.tripInfo}>
           <View>
             <Text style={styles.label}>Categoría</Text>
@@ -106,6 +216,7 @@ const styles = StyleSheet.create({
   },
   topCard: {
     position: 'absolute',
+    zIndex: 2,
     top: 16,
     left: 16,
     right: 16,
@@ -136,8 +247,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 8,
   },
+  routeError: {
+    color: '#c82333',
+  },
+  simulation: {
+    color: '#570376',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+  },
   bottomCard: {
     position: 'absolute',
+    zIndex: 2,
     bottom: 20,
     left: 16,
     right: 16,
